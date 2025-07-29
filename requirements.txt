@@ -3,3 +3,4 @@ pandas-datareader==0.10.0
 DateTime==5.5
 yfinance==0.2.65
 matplotlib==3.10.3
+statsmodels==0.14.4

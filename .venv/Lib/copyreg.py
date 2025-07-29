@@ -25,10 +25,16 @@ def constructor(object):
 
 # Example: provide pickling support for complex numbers.
 
-def pickle_complex(c):
-    return complex, (c.real, c.imag)
+try:
+    complex
+except NameError:
+    pass
+else:
 
-pickle(complex, pickle_complex, complex)
+    def pickle_complex(c):
+        return complex, (c.real, c.imag)
+
+    pickle(complex, pickle_complex, complex)
 
 def pickle_union(obj):
     import functools, operator
@@ -83,10 +89,6 @@ def _reduce_ex(self, proto):
         except AttributeError:
             dict = None
     else:
-        if (type(self).__getstate__ is object.__getstate__ and
-            getattr(self, "__slots__", None)):
-            raise TypeError("a class that defines __slots__ without "
-                            "defining __getstate__ cannot be pickled")
         dict = getstate()
     if dict:
         return _reconstructor, args, dict

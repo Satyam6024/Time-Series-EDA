@@ -11,7 +11,6 @@ from _ctypes import CFuncPtr as _CFuncPtr
 from _ctypes import __version__ as _ctypes_version
 from _ctypes import RTLD_LOCAL, RTLD_GLOBAL
 from _ctypes import ArgumentError
-from _ctypes import SIZEOF_TIME_T
 
 from struct import calcsize as _calcsize
 
@@ -66,8 +65,12 @@ def create_string_buffer(init, size=None):
         return buf
     raise TypeError(init)
 
-# Alias to create_string_buffer() for backward compatibility
-c_buffer = create_string_buffer
+def c_buffer(init, size=None):
+##    "deprecated, use create_string_buffer instead"
+##    import warnings
+##    warnings.warn("c_buffer is deprecated, use create_string_buffer instead",
+##                  DeprecationWarning, stacklevel=2)
+    return create_string_buffer(init, size)
 
 _c_functype_cache = {}
 def CFUNCTYPE(restype, *argtypes, **kw):
@@ -93,18 +96,15 @@ def CFUNCTYPE(restype, *argtypes, **kw):
         flags |= _FUNCFLAG_USE_LASTERROR
     if kw:
         raise ValueError("unexpected keyword argument(s) %s" % kw.keys())
-
     try:
         return _c_functype_cache[(restype, argtypes, flags)]
     except KeyError:
-        pass
-
-    class CFunctionType(_CFuncPtr):
-        _argtypes_ = argtypes
-        _restype_ = restype
-        _flags_ = flags
-    _c_functype_cache[(restype, argtypes, flags)] = CFunctionType
-    return CFunctionType
+        class CFunctionType(_CFuncPtr):
+            _argtypes_ = argtypes
+            _restype_ = restype
+            _flags_ = flags
+        _c_functype_cache[(restype, argtypes, flags)] = CFunctionType
+        return CFunctionType
 
 if _os.name == "nt":
     from _ctypes import LoadLibrary as _dlopen
@@ -120,18 +120,15 @@ if _os.name == "nt":
             flags |= _FUNCFLAG_USE_LASTERROR
         if kw:
             raise ValueError("unexpected keyword argument(s) %s" % kw.keys())
-
         try:
             return _win_functype_cache[(restype, argtypes, flags)]
         except KeyError:
-            pass
-
-        class WinFunctionType(_CFuncPtr):
-            _argtypes_ = argtypes
-            _restype_ = restype
-            _flags_ = flags
-        _win_functype_cache[(restype, argtypes, flags)] = WinFunctionType
-        return WinFunctionType
+            class WinFunctionType(_CFuncPtr):
+                _argtypes_ = argtypes
+                _restype_ = restype
+                _flags_ = flags
+            _win_functype_cache[(restype, argtypes, flags)] = WinFunctionType
+            return WinFunctionType
     if WINFUNCTYPE.__doc__:
         WINFUNCTYPE.__doc__ = CFUNCTYPE.__doc__.replace("CFUNCTYPE", "WINFUNCTYPE")
 
@@ -344,8 +341,6 @@ class CDLL(object):
                  use_errno=False,
                  use_last_error=False,
                  winmode=None):
-        if name:
-            name = _os.fspath(name)
         self._name = name
         flags = self._func_flags_
         if use_errno:
@@ -446,10 +441,7 @@ class LibraryLoader(object):
     def __getattr__(self, name):
         if name[0] == '_':
             raise AttributeError(name)
-        try:
-            dll = self._dlltype(name)
-        except OSError:
-            raise AttributeError(name)
+        dll = self._dlltype(name)
         setattr(self, name, dll)
         return dll
 
@@ -554,7 +546,6 @@ if _os.name == "nt": # COM stuff
         return ccom.DllCanUnloadNow()
 
 from ctypes._endian import BigEndianStructure, LittleEndianStructure
-from ctypes._endian import BigEndianUnion, LittleEndianUnion
 
 # Fill in specifically-sized types
 c_int8 = c_byte
@@ -568,12 +559,5 @@ for kind in [c_ushort, c_uint, c_ulong, c_ulonglong]:
     elif sizeof(kind) == 4: c_uint32 = kind
     elif sizeof(kind) == 8: c_uint64 = kind
 del(kind)
-
-if SIZEOF_TIME_T == 8:
-    c_time_t = c_int64
-elif SIZEOF_TIME_T == 4:
-    c_time_t = c_int32
-else:
-    raise SystemError(f"Unexpected sizeof(time_t): {SIZEOF_TIME_T=}")
 
 _reset_cache()

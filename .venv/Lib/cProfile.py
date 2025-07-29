@@ -7,8 +7,6 @@
 __all__ = ["run", "runctx", "Profile"]
 
 import _lsprof
-import importlib.machinery
-import io
 import profile as _pyprofile
 
 # ____________________________________________________________
@@ -142,7 +140,7 @@ def main():
         help="Save stats to <outfile>", default=None)
     parser.add_option('-s', '--sort', dest="sort",
         help="Sort order when printing to stdout, based on pstats.Stats class",
-        default=2,
+        default=-1,
         choices=sorted(pstats.Stats.sort_arg_dict_default))
     parser.add_option('-m', dest="module", action="store_true",
         help="Profile a library module", default=False)
@@ -169,14 +167,11 @@ def main():
         else:
             progname = args[0]
             sys.path.insert(0, os.path.dirname(progname))
-            with io.open_code(progname) as fp:
+            with open(progname, 'rb') as fp:
                 code = compile(fp.read(), progname, 'exec')
-            spec = importlib.machinery.ModuleSpec(name='__main__', loader=None,
-                                                  origin=progname)
             globs = {
-                '__spec__': spec,
-                '__file__': spec.origin,
-                '__name__': spec.name,
+                '__file__': progname,
+                '__name__': '__main__',
                 '__package__': None,
                 '__cached__': None,
             }

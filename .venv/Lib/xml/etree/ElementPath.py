@@ -226,6 +226,7 @@ def prepare_parent(next, token):
 
 def prepare_predicate(next, token):
     # FIXME: replace with real parser!!! refs:
+    # http://effbot.org/zone/simple-iterator-parser.htm
     # http://javascript.crockford.com/tdop/tdop.html
     signature = []
     predicate = []
@@ -416,8 +417,6 @@ def findall(elem, path, namespaces=None):
 def findtext(elem, path, default=None, namespaces=None):
     try:
         elem = next(iterfind(elem, path, namespaces))
-        if elem.text is None:
-            return ""
-        return elem.text
+        return elem.text or ""
     except StopIteration:
         return default

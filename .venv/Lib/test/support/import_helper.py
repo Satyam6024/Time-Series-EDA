@@ -1,9 +1,7 @@
 import contextlib
-import _imp
 import importlib
 import importlib.util
 import os
-import shutil
 import sys
 import unittest
 import warnings
@@ -60,7 +58,7 @@ def make_legacy_pyc(source):
     pyc_file = importlib.util.cache_from_source(source)
     up_one = os.path.dirname(os.path.abspath(source))
     legacy_pyc = os.path.join(up_one, source + 'c')
-    shutil.move(pyc_file, legacy_pyc)
+    os.rename(pyc_file, legacy_pyc)
     return legacy_pyc
 
 
@@ -82,53 +80,36 @@ def import_module(name, deprecated=False, *, required_on=()):
             raise unittest.SkipTest(str(msg))
 
 
-def _save_and_remove_modules(names):
-    orig_modules = {}
-    prefixes = tuple(name + '.' for name in names)
+def _save_and_remove_module(name, orig_modules):
+    """Helper function to save and remove a module from sys.modules
+
+    Raise ImportError if the module can't be imported.
+    """
+    # try to import the module and raise an error if it can't be imported
+    if name not in sys.modules:
+        __import__(name)
+        del sys.modules[name]
     for modname in list(sys.modules):
-        if modname in names or modname.startswith(prefixes):
-            orig_modules[modname] = sys.modules.pop(modname)
-    return orig_modules
+        if modname == name or modname.startswith(name + '.'):
+            orig_modules[modname] = sys.modules[modname]
+            del sys.modules[modname]
 
 
-@contextlib.contextmanager
-def frozen_modules(enabled=True):
-    """Force frozen modules to be used (or not).
+def _save_and_block_module(name, orig_modules):
+    """Helper function to save and block a module in sys.modules
 
-    This only applies to modules that haven't been imported yet.
-    Also, some essential modules will always be imported frozen.
+    Return True if the module was in sys.modules, False otherwise.
     """
-    _imp._override_frozen_modules_for_tests(1 if enabled else -1)
+    saved = True
     try:
-        yield
-    finally:
-        _imp._override_frozen_modules_for_tests(0)
+        orig_modules[name] = sys.modules[name]
+    except KeyError:
+        saved = False
+    sys.modules[name] = None
+    return saved
 
 
-@contextlib.contextmanager
-def multi_interp_extensions_check(enabled=True):
-    """Force legacy modules to be allowed in subinterpreters (or not).
-
-    ("legacy" == single-phase init)
-
-    This only applies to modules that haven't been imported yet.
-    It overrides the PyInterpreterConfig.check_multi_interp_extensions
-    setting (see support.run_in_subinterp_with_config() and
-    _xxsubinterpreters.create()).
-
-    Also see importlib.utils.allowing_all_extensions().
-    """
-    old = _imp._override_multi_interp_extensions_check(1 if enabled else -1)
-    try:
-        yield
-    finally:
-        _imp._override_multi_interp_extensions_check(old)
-
-
-def import_fresh_module(name, fresh=(), blocked=(), *,
-                        deprecated=False,
-                        usefrozen=False,
-                        ):
+def import_fresh_module(name, fresh=(), blocked=(), deprecated=False):
     """Import and return a module, deliberately bypassing sys.modules.
 
     This function imports and returns a fresh copy of the named Python module
@@ -137,8 +118,7 @@ def import_fresh_module(name, fresh=(), blocked=(), *,
     this operation.
 
     *fresh* is an iterable of additional module names that are also removed
-    from the sys.modules cache before doing the import. If one of these
-    modules can't be imported, None is returned.
+    from the sys.modules cache before doing the import.
 
     *blocked* is an iterable of module names that are replaced with None
     in the module cache during the import to ensure that attempts to import
@@ -153,34 +133,30 @@ def import_fresh_module(name, fresh=(), blocked=(), *,
 
     This function will raise ImportError if the named module cannot be
     imported.
-
-    If "usefrozen" is False (the default) then the frozen importer is
-    disabled (except for essential modules like importlib._bootstrap).
     """
     # NOTE: test_heapq, test_json and test_warnings include extra sanity checks
     # to make sure that this utility function is working as expected
     with _ignore_deprecated_imports(deprecated):
         # Keep track of modules saved for later restoration as well
         # as those which just need a blocking entry removed
-        fresh = list(fresh)
-        blocked = list(blocked)
-        names = {name, *fresh, *blocked}
-        orig_modules = _save_and_remove_modules(names)
-        for modname in blocked:
-            sys.modules[modname] = None
-
+        orig_modules = {}
+        names_to_remove = []
+        _save_and_remove_module(name, orig_modules)
         try:
-            with frozen_modules(usefrozen):
-                # Return None when one of the "fresh" modules can not be imported.
-                try:
-                    for modname in fresh:
-                        __import__(modname)
-                except ImportError:
-                    return None
-                return importlib.import_module(name)
+            for fresh_name in fresh:
+                _save_and_remove_module(fresh_name, orig_modules)
+            for blocked_name in blocked:
+                if not _save_and_block_module(blocked_name, orig_modules):
+                    names_to_remove.append(blocked_name)
+            fresh_module = importlib.import_module(name)
+        except ImportError:
+            fresh_module = None
         finally:
-            _save_and_remove_modules(names)
-            sys.modules.update(orig_modules)
+            for orig_name, module in orig_modules.items():
+                sys.modules[orig_name] = module
+            for name_to_remove in names_to_remove:
+                del sys.modules[name_to_remove]
+        return fresh_module
 
 
 class CleanImport(object):
@@ -193,12 +169,9 @@ class CleanImport(object):
 
         with CleanImport("foo"):
             importlib.import_module("foo") # new reference
-
-    If "usefrozen" is False (the default) then the frozen importer is
-    disabled (except for essential modules like importlib._bootstrap).
     """
 
-    def __init__(self, *module_names, usefrozen=False):
+    def __init__(self, *module_names):
         self.original_modules = sys.modules.copy()
         for module_name in module_names:
             if module_name in sys.modules:
@@ -210,15 +183,12 @@ class CleanImport(object):
                 if module.__name__ != module_name:
                     del sys.modules[module.__name__]
                 del sys.modules[module_name]
-        self._frozen_modules = frozen_modules(usefrozen)
 
     def __enter__(self):
-        self._frozen_modules.__enter__()
         return self
 
     def __exit__(self, *ignore_exc):
         sys.modules.update(self.original_modules)
-        self._frozen_modules.__exit__(*ignore_exc)
 
 
 class DirsOnSysPath(object):
@@ -266,11 +236,3 @@ def modules_cleanup(oldmodules):
     # do currently). Implicitly imported *real* modules should be left alone
     # (see issue 10556).
     sys.modules.update(oldmodules)
-
-
-def mock_register_at_fork(func):
-    # bpo-30599: Mock os.register_at_fork() when importing the random module,
-    # since this function doesn't allow to unregister callbacks and would leak
-    # memory.
-    from unittest import mock
-    return mock.patch('os.register_at_fork', create=True)(func)

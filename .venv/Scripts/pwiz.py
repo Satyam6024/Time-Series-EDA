@@ -1,4 +1,4 @@
-#!C:\Git Projects\Time Series - Airline Passenger Prediction\.venv\python.exe
+#!C:\Git Projects\Time-Series-EDA\.venv\python.exe
 
 import datetime
 import os

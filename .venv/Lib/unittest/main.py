@@ -3,13 +3,11 @@
 import sys
 import argparse
 import os
-import warnings
 
 from . import loader, runner
 from .signals import installHandler
 
 __unittest = True
-_NO_TESTS_EXITCODE = 5
 
 MAIN_EXAMPLES = """\
 Examples:
@@ -41,7 +39,7 @@ def _convert_name(name):
             name = rel_path
         # on Windows both '\' and '/' are used as path
         # separators. Better to replace both than rely on os.path.sep
-        return os.path.normpath(name)[:-3].replace('\\', '.').replace('/', '.')
+        return name[:-3].replace('\\', '.').replace('/', '.')
     return name
 
 def _convert_names(names):
@@ -67,8 +65,7 @@ class TestProgram(object):
     def __init__(self, module='__main__', defaultTest=None, argv=None,
                     testRunner=None, testLoader=loader.defaultTestLoader,
                     exit=True, verbosity=1, failfast=None, catchbreak=None,
-                    buffer=None, warnings=None, *, tb_locals=False,
-                    durations=None):
+                    buffer=None, warnings=None, *, tb_locals=False):
         if isinstance(module, str):
             self.module = __import__(module)
             for part in module.split('.')[1:]:
@@ -84,7 +81,6 @@ class TestProgram(object):
         self.verbosity = verbosity
         self.buffer = buffer
         self.tb_locals = tb_locals
-        self.durations = durations
         if warnings is None and not sys.warnoptions:
             # even if DeprecationWarnings are ignored by default
             # print them anyway unless other warnings settings are
@@ -105,8 +101,6 @@ class TestProgram(object):
         self.runTests()
 
     def usageExit(self, msg=None):
-        warnings.warn("TestProgram.usageExit() is deprecated and will be"
-                      " removed in Python 3.13", DeprecationWarning)
         if msg:
             print(msg)
         if self._discovery_parser is None:
@@ -181,9 +175,6 @@ class TestProgram(object):
         parser.add_argument('--locals', dest='tb_locals',
                             action='store_true',
                             help='Show local variables in tracebacks')
-        parser.add_argument('--durations', dest='durations', type=int,
-                            default=None, metavar="N",
-                            help='Show the N slowest test cases (N=0 for all)')
         if self.failfast is None:
             parser.add_argument('-f', '--failfast', dest='failfast',
                                 action='store_true',
@@ -264,10 +255,9 @@ class TestProgram(object):
                                                  failfast=self.failfast,
                                                  buffer=self.buffer,
                                                  warnings=self.warnings,
-                                                 tb_locals=self.tb_locals,
-                                                 durations=self.durations)
+                                                 tb_locals=self.tb_locals)
                 except TypeError:
-                    # didn't accept the tb_locals or durations argument
+                    # didn't accept the tb_locals argument
                     testRunner = self.testRunner(verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer,
@@ -280,12 +270,6 @@ class TestProgram(object):
             testRunner = self.testRunner
         self.result = testRunner.run(self.test)
         if self.exit:
-            if self.result.testsRun == 0:
-                sys.exit(_NO_TESTS_EXITCODE)
-            elif self.result.wasSuccessful():
-                sys.exit(0)
-            else:
-                sys.exit(1)
-
+            sys.exit(not self.result.wasSuccessful())
 
 main = TestProgram

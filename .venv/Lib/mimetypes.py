@@ -141,23 +141,25 @@ class MimeTypes:
                 type = 'text/plain'
             return type, None           # never compressed, so encoding is None
         base, ext = posixpath.splitext(url)
-        while (ext_lower := ext.lower()) in self.suffix_map:
-            base, ext = posixpath.splitext(base + self.suffix_map[ext_lower])
-        # encodings_map is case sensitive
+        while ext in self.suffix_map:
+            base, ext = posixpath.splitext(base + self.suffix_map[ext])
         if ext in self.encodings_map:
             encoding = self.encodings_map[ext]
             base, ext = posixpath.splitext(base)
         else:
             encoding = None
-        ext = ext.lower()
         types_map = self.types_map[True]
         if ext in types_map:
             return types_map[ext], encoding
+        elif ext.lower() in types_map:
+            return types_map[ext.lower()], encoding
         elif strict:
             return None, encoding
         types_map = self.types_map[False]
         if ext in types_map:
             return types_map[ext], encoding
+        elif ext.lower() in types_map:
+            return types_map[ext.lower()], encoding
         else:
             return None, encoding
 
@@ -173,7 +175,7 @@ class MimeTypes:
         but non-standard types.
         """
         type = type.lower()
-        extensions = list(self.types_map_inv[True].get(type, []))
+        extensions = self.types_map_inv[True].get(type, [])
         if not strict:
             for ext in self.types_map_inv[False].get(type, []):
                 if ext not in extensions:
@@ -217,7 +219,10 @@ class MimeTypes:
         list of standard types, else to the list of non-standard
         types.
         """
-        while line := fp.readline():
+        while 1:
+            line = fp.readline()
+            if not line:
+                break
             words = line.split()
             for i in range(len(words)):
                 if words[i][0] == '#':
@@ -424,15 +429,13 @@ def _default_mime_types():
     # Make sure the entry with the preferred file extension for a particular mime type
     # appears before any others of the same mimetype.
     types_map = _types_map_default = {
-        '.js'     : 'text/javascript',
-        '.mjs'    : 'text/javascript',
+        '.js'     : 'application/javascript',
+        '.mjs'    : 'application/javascript',
         '.json'   : 'application/json',
         '.webmanifest': 'application/manifest+json',
         '.doc'    : 'application/msword',
         '.dot'    : 'application/msword',
         '.wiz'    : 'application/msword',
-        '.nq'     : 'application/n-quads',
-        '.nt'     : 'application/n-triples',
         '.bin'    : 'application/octet-stream',
         '.a'      : 'application/octet-stream',
         '.dll'    : 'application/octet-stream',
@@ -446,7 +449,6 @@ def _default_mime_types():
         '.ps'     : 'application/postscript',
         '.ai'     : 'application/postscript',
         '.eps'    : 'application/postscript',
-        '.trig'   : 'application/trig',
         '.m3u'    : 'application/vnd.apple.mpegurl',
         '.m3u8'   : 'application/vnd.apple.mpegurl',
         '.xls'    : 'application/vnd.ms-excel',
@@ -514,7 +516,6 @@ def _default_mime_types():
         '.aiff'   : 'audio/x-aiff',
         '.ra'     : 'audio/x-pn-realaudio',
         '.wav'    : 'audio/x-wav',
-        '.avif'   : 'image/avif',
         '.bmp'    : 'image/bmp',
         '.gif'    : 'image/gif',
         '.ief'    : 'image/ief',
@@ -529,6 +530,7 @@ def _default_mime_types():
         '.tif'    : 'image/tiff',
         '.ico'    : 'image/vnd.microsoft.icon',
         '.ras'    : 'image/x-cmu-raster',
+        '.bmp'    : 'image/x-ms-bmp',
         '.pnm'    : 'image/x-portable-anymap',
         '.pbm'    : 'image/x-portable-bitmap',
         '.pgm'    : 'image/x-portable-graymap',
@@ -545,17 +547,14 @@ def _default_mime_types():
         '.csv'    : 'text/csv',
         '.html'   : 'text/html',
         '.htm'    : 'text/html',
-        '.n3'     : 'text/n3',
         '.txt'    : 'text/plain',
         '.bat'    : 'text/plain',
         '.c'      : 'text/plain',
         '.h'      : 'text/plain',
         '.ksh'    : 'text/plain',
         '.pl'     : 'text/plain',
-        '.srt'    : 'text/plain',
         '.rtx'    : 'text/richtext',
         '.tsv'    : 'text/tab-separated-values',
-        '.vtt'    : 'text/vtt',
         '.py'     : 'text/x-python',
         '.etx'    : 'text/x-setext',
         '.sgm'    : 'text/x-sgml',
@@ -587,7 +586,6 @@ def _default_mime_types():
         '.pict': 'image/pict',
         '.pct' : 'image/pict',
         '.pic' : 'image/pict',
-        '.webp': 'image/webp',
         '.xul' : 'text/xul',
         }
 

@@ -8,7 +8,6 @@ import sys
 import time
 import traceback
 import unittest
-from test import support
 
 class RegressionTestResult(unittest.TextTestResult):
     USE_XML = False
@@ -19,13 +18,10 @@ class RegressionTestResult(unittest.TextTestResult):
         self.buffer = True
         if self.USE_XML:
             from xml.etree import ElementTree as ET
-            from datetime import datetime, UTC
+            from datetime import datetime
             self.__ET = ET
             self.__suite = ET.Element('testsuite')
-            self.__suite.set('start',
-                             datetime.now(UTC)
-                                     .replace(tzinfo=None)
-                                     .isoformat(' '))
+            self.__suite.set('start', datetime.utcnow().isoformat(' '))
             self.__e = None
         self.__start_time = None
 
@@ -113,8 +109,6 @@ class RegressionTestResult(unittest.TextTestResult):
     def addFailure(self, test, err):
         self._add_result(test, True, failure=self.__makeErrorDict(*err))
         super().addFailure(test, err)
-        if support.failfast:
-            self.stop()
 
     def addSkip(self, test, reason):
         self._add_result(test, skipped=reason)
@@ -179,7 +173,7 @@ if __name__ == '__main__':
             raise RuntimeError('error message')
 
     suite = unittest.TestSuite()
-    suite.addTest(unittest.TestLoader().loadTestsFromTestCase(TestTests))
+    suite.addTest(unittest.makeSuite(TestTests))
     stream = io.StringIO()
     runner_cls = get_test_runner_class(sum(a == '-v' for a in sys.argv))
     runner = runner_cls(sys.stdout)
