@@ -27,10 +27,6 @@ option -r tells it to recurse down directories found inside
 explicitly given directories.
 """
 
-import warnings
-
-warnings._deprecated(__name__, remove=(3, 13))
-
 # The file structure is top-down except that the test program and its
 # subroutine come last.
 
@@ -77,10 +73,7 @@ def whathdr(filename):
 tests = []
 
 def test_aifc(h, f):
-    """AIFC and AIFF files"""
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', category=DeprecationWarning)
-        import aifc
+    import aifc
     if not h.startswith(b'FORM'):
         return None
     if h[8:12] == b'AIFC':
@@ -101,7 +94,6 @@ tests.append(test_aifc)
 
 
 def test_au(h, f):
-    """AU and SND files"""
     if h.startswith(b'.snd'):
         func = get_long_be
     elif h[:4] in (b'\0ds.', b'dns.'):
@@ -135,7 +127,6 @@ tests.append(test_au)
 
 
 def test_hcom(h, f):
-    """HCOM file"""
     if h[65:69] != b'FSSD' or h[128:132] != b'HCOM':
         return None
     divisor = get_long_be(h[144:148])
@@ -149,7 +140,6 @@ tests.append(test_hcom)
 
 
 def test_voc(h, f):
-    """VOC file"""
     if not h.startswith(b'Creative Voice File\032'):
         return None
     sbseek = get_short_le(h[20:22])
@@ -164,7 +154,6 @@ tests.append(test_voc)
 
 
 def test_wav(h, f):
-    """WAV file"""
     import wave
     # 'RIFF' <len> 'WAVE' 'fmt ' <len>
     if not h.startswith(b'RIFF') or h[8:12] != b'WAVE' or h[12:16] != b'fmt ':
@@ -181,7 +170,6 @@ tests.append(test_wav)
 
 
 def test_8svx(h, f):
-    """8SVX file"""
     if not h.startswith(b'FORM') or h[8:12] != b'8SVX':
         return None
     # Should decode it to get #channels -- assume always 1
@@ -191,7 +179,6 @@ tests.append(test_8svx)
 
 
 def test_sndt(h, f):
-    """SNDT file"""
     if h.startswith(b'SOUND'):
         nsamples = get_long_le(h[8:12])
         rate = get_short_le(h[20:22])
@@ -201,7 +188,6 @@ tests.append(test_sndt)
 
 
 def test_sndr(h, f):
-    """SNDR file"""
     if h.startswith(b'\0\0'):
         rate = get_short_le(h[2:4])
         if 4000 <= rate <= 25000:

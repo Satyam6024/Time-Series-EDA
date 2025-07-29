@@ -174,7 +174,7 @@ class SocketIO:
         except TypeError:
             return ("ERROR", "Bad request format")
         if oid not in self.objtable:
-            return ("ERROR", f"Unknown object id: {oid!r}")
+            return ("ERROR", "Unknown object id: %r" % (oid,))
         obj = self.objtable[oid]
         if methodname == "__methods__":
             methods = {}
@@ -185,7 +185,7 @@ class SocketIO:
             _getattributes(obj, attributes)
             return ("OK", attributes)
         if not hasattr(obj, methodname):
-            return ("ERROR", f"Unsupported method name: {methodname!r}")
+            return ("ERROR", "Unsupported method name: %r" % (methodname,))
         method = getattr(obj, methodname)
         try:
             if how == 'CALL':
@@ -307,7 +307,7 @@ class SocketIO:
         self.debug("_getresponse:myseq:", myseq)
         if threading.current_thread() is self.sockthread:
             # this thread does all reading of requests or responses
-            while True:
+            while 1:
                 response = self.pollresponse(myseq, wait)
                 if response is not None:
                     return response
@@ -417,7 +417,7 @@ class SocketIO:
         self.responses and notify the owning thread.
 
         """
-        while True:
+        while 1:
             # send queued response if there is one available
             try:
                 qmsg = response_queue.get(0)

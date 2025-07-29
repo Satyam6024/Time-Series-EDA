@@ -7,9 +7,6 @@ See: RFC 1014
 import struct
 from io import BytesIO
 from functools import wraps
-import warnings
-
-warnings._deprecated(__name__, remove=(3, 13))
 
 __all__ = ["Error", "Packer", "Unpacker", "ConversionError"]
 
@@ -224,7 +221,9 @@ class Unpacker:
 
     def unpack_list(self, unpack_item):
         list = []
-        while (x := self.unpack_uint()) != 0:
+        while 1:
+            x = self.unpack_uint()
+            if x == 0: break
             if x != 1:
                 raise ConversionError('0 or 1 expected, got %r' % (x,))
             item = unpack_item()

@@ -264,22 +264,16 @@ boolean = Boolean = bool
 
 # Issue #13305: different format codes across platforms
 _day0 = datetime(1, 1, 1)
-def _try(fmt):
-    try:
-        return _day0.strftime(fmt) == '0001'
-    except ValueError:
-        return False
-if _try('%Y'):      # Mac OS X
+if _day0.strftime('%Y') == '0001':      # Mac OS X
     def _iso8601_format(value):
         return value.strftime("%Y%m%dT%H:%M:%S")
-elif _try('%4Y'):   # Linux
+elif _day0.strftime('%4Y') == '0001':   # Linux
     def _iso8601_format(value):
         return value.strftime("%4Y%m%dT%H:%M:%S")
 else:
     def _iso8601_format(value):
         return value.strftime("%Y%m%dT%H:%M:%S").zfill(17)
 del _day0
-del _try
 
 
 def _strftime(value):
@@ -850,9 +844,9 @@ class MultiCallIterator:
 
     def __getitem__(self, i):
         item = self.results[i]
-        if isinstance(item, dict):
+        if type(item) == type({}):
             raise Fault(item['faultCode'], item['faultString'])
-        elif isinstance(item, list):
+        elif type(item) == type([]):
             return item[0]
         else:
             raise ValueError("unexpected type in multicall result")
@@ -1339,7 +1333,10 @@ class Transport:
 
         p, u = self.getparser()
 
-        while data := stream.read(1024):
+        while 1:
+            data = stream.read(1024)
+            if not data:
+                break
             if self.verbose:
                 print("body:", repr(data))
             p.feed(data)

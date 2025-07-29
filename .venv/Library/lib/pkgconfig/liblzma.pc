@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: 0BSD
 # Author: Lasse Collin
 
-prefix=C:/Git Projects/Time Series - Airline Passenger Prediction/.venv/Library
+prefix=C:/Git Projects/Time-Series-EDA/.venv/Library
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include

@@ -21,9 +21,6 @@ datetime.datetime objects.
 
 Generate Plist example:
 
-    import datetime
-    import plistlib
-
     pl = dict(
         aString = "Doodah",
         aList = ["A", "B", 12, 32.1, [1, 2, 3]],
@@ -31,28 +28,22 @@ Generate Plist example:
         anInt = 728,
         aDict = dict(
             anotherString = "<hello & hi there!>",
-            aThirdString = "M\xe4ssig, Ma\xdf",
+            aUnicodeValue = "M\xe4ssig, Ma\xdf",
             aTrueValue = True,
             aFalseValue = False,
         ),
         someData = b"<binary gunk>",
         someMoreData = b"<lots of binary gunk>" * 10,
-        aDate = datetime.datetime.now()
+        aDate = datetime.datetime.fromtimestamp(time.mktime(time.gmtime())),
     )
-    print(plistlib.dumps(pl).decode())
+    with open(fileName, 'wb') as fp:
+        dump(pl, fp)
 
 Parse Plist example:
 
-    import plistlib
-
-    plist = b'''<plist version="1.0">
-    <dict>
-        <key>foo</key>
-        <string>bar</string>
-    </dict>
-    </plist>'''
-    pl = plistlib.loads(plist)
-    print(pl["foo"])
+    with open(fileName, 'rb') as fp:
+        pl = load(fp)
+    print(pl["aKey"])
 """
 __all__ = [
     "InvalidFileException", "FMT_XML", "FMT_BINARY", "load", "dump", "loads", "dumps", "UID"
@@ -161,7 +152,7 @@ def _date_to_string(d):
 def _escape(text):
     m = _controlCharPat.search(text)
     if m is not None:
-        raise ValueError("strings can't contain control characters; "
+        raise ValueError("strings can't contains control characters; "
                          "use bytes instead")
     text = text.replace("\r\n", "\n")       # convert DOS line endings
     text = text.replace("\r", "\n")         # convert Mac line endings
@@ -187,8 +178,8 @@ class _PlistParser:
         return self.root
 
     def handle_entity_decl(self, entity_name, is_parameter_entity, value, base, system_id, public_id, notation_name):
-        # Reject plist files with entity declarations to avoid XML vulnerabilities in expat.
-        # Regular plist files don't contain those declarations, and Apple's plutil tool does not
+        # Reject plist files with entity declarations to avoid XML vulnerabilies in expat.
+        # Regular plist files don't contain those declerations, and Apple's plutil tool does not
         # accept them either.
         raise InvalidFileException("XML entity declarations are not supported in plist files")
 
@@ -208,7 +199,7 @@ class _PlistParser:
 
     def add_object(self, value):
         if self.current_key is not None:
-            if not isinstance(self.stack[-1], dict):
+            if not isinstance(self.stack[-1], type({})):
                 raise ValueError("unexpected element at line %d" %
                                  self.parser.CurrentLineNumber)
             self.stack[-1][self.current_key] = value
@@ -217,7 +208,7 @@ class _PlistParser:
             # this is the root object
             self.root = value
         else:
-            if not isinstance(self.stack[-1], list):
+            if not isinstance(self.stack[-1], type([])):
                 raise ValueError("unexpected element at line %d" %
                                  self.parser.CurrentLineNumber)
             self.stack[-1].append(value)
@@ -241,7 +232,7 @@ class _PlistParser:
         self.stack.pop()
 
     def end_key(self):
-        if self.current_key or not isinstance(self.stack[-1], dict):
+        if self.current_key or not isinstance(self.stack[-1], type({})):
             raise ValueError("unexpected key at line %d" %
                              self.parser.CurrentLineNumber)
         self.current_key = self.get_data()

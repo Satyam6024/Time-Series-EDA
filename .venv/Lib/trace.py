@@ -49,7 +49,6 @@ Sample use, programmatically
 """
 __all__ = ['Trace', 'CoverageResults']
 
-import io
 import linecache
 import os
 import sys
@@ -173,7 +172,7 @@ class CoverageResults:
             try:
                 with open(self.infile, 'rb') as f:
                     counts, calledfuncs, callers = pickle.load(f)
-                self.update(self.__class__(counts, calledfuncs, callers=callers))
+                self.update(self.__class__(counts, calledfuncs, callers))
             except (OSError, EOFError, ValueError) as err:
                 print(("Skipping counts file %r: %s"
                                       % (self.infile, err)), file=sys.stderr)
@@ -717,7 +716,7 @@ def main():
             sys.argv = [opts.progname, *opts.arguments]
             sys.path[0] = os.path.dirname(opts.progname)
 
-            with io.open_code(opts.progname) as fp:
+            with open(opts.progname, 'rb') as fp:
                 code = compile(fp.read(), opts.progname, 'exec')
             # try to emulate __main__ namespace as much as possible
             globs = {

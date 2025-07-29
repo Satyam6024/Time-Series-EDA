@@ -60,7 +60,6 @@ class _ProactorBasePipeTransport(transports._FlowControlMixin,
         self._pending_write = 0
         self._conn_lost = 0
         self._closing = False  # Set when close() called.
-        self._called_connection_lost = False
         self._eof_written = False
         if self._server is not None:
             self._server._attach()
@@ -114,7 +113,7 @@ class _ProactorBasePipeTransport(transports._FlowControlMixin,
     def __del__(self, _warn=warnings.warn):
         if self._sock is not None:
             _warn(f"unclosed transport {self!r}", ResourceWarning, source=self)
-            self._sock.close()
+            self.close()
 
     def _fatal_error(self, exc, message='Fatal error on pipe transport'):
         try:
@@ -137,7 +136,7 @@ class _ProactorBasePipeTransport(transports._FlowControlMixin,
                 self._empty_waiter.set_result(None)
             else:
                 self._empty_waiter.set_exception(exc)
-        if self._closing and self._called_connection_lost:
+        if self._closing:
             return
         self._closing = True
         self._conn_lost += 1
@@ -152,8 +151,6 @@ class _ProactorBasePipeTransport(transports._FlowControlMixin,
         self._loop.call_soon(self._call_connection_lost, exc)
 
     def _call_connection_lost(self, exc):
-        if self._called_connection_lost:
-            return
         try:
             self._protocol.connection_lost(exc)
         finally:
@@ -161,7 +158,7 @@ class _ProactorBasePipeTransport(transports._FlowControlMixin,
             # end then it may fail with ERROR_NETNAME_DELETED if we
             # just close our end.  First calling shutdown() seems to
             # cure it, but maybe using DisconnectEx() would be better.
-            if hasattr(self._sock, 'shutdown') and self._sock.fileno() != -1:
+            if hasattr(self._sock, 'shutdown'):
                 self._sock.shutdown(socket.SHUT_RDWR)
             self._sock.close()
             self._sock = None
@@ -169,7 +166,6 @@ class _ProactorBasePipeTransport(transports._FlowControlMixin,
             if server is not None:
                 server._detach()
                 self._server = None
-            self._called_connection_lost = True
 
     def get_write_buffer_size(self):
         size = self._pending_write
@@ -225,7 +221,7 @@ class _ProactorReadPipeTransport(_ProactorBasePipeTransport,
         length = self._pending_data_length
         self._pending_data_length = -1
         if length > -1:
-            # Call the protocol method after calling _loop_reading(),
+            # Call the protocol methode after calling _loop_reading(),
             # since the protocol can decide to pause reading again.
             self._loop.call_soon(self._data_received, self._data[:length], length)
 
@@ -288,8 +284,7 @@ class _ProactorReadPipeTransport(_ProactorBasePipeTransport,
                         # we got end-of-file so no need to reschedule a new read
                         return
 
-                    # It's a new slice so make it immutable so protocols upstream don't have problems
-                    data = bytes(memoryview(self._data)[:length])
+                    data = self._data[:length]
                 else:
                     # the future will be replaced by next proactor.recv call
                     fut.cancel()
@@ -457,14 +452,12 @@ class _ProactorWritePipeTransport(_ProactorBaseWritePipeTransport):
             self.close()
 
 
-class _ProactorDatagramTransport(_ProactorBasePipeTransport,
-                                 transports.DatagramTransport):
+class _ProactorDatagramTransport(_ProactorBasePipeTransport):
     max_size = 256 * 1024
     def __init__(self, loop, sock, protocol, address=None,
                  waiter=None, extra=None):
         self._address = address
         self._empty_waiter = None
-        self._buffer_size = 0
         # We don't need to call _protocol.connection_made() since our base
         # constructor does it for us.
         super().__init__(loop, sock, protocol, waiter=waiter, extra=extra)
@@ -477,7 +470,7 @@ class _ProactorDatagramTransport(_ProactorBasePipeTransport,
         _set_socket_extra(self, sock)
 
     def get_write_buffer_size(self):
-        return self._buffer_size
+        return sum(len(data) for data, _ in self._buffer)
 
     def abort(self):
         self._force_close(None)
@@ -502,7 +495,6 @@ class _ProactorDatagramTransport(_ProactorBasePipeTransport,
 
         # Ensure that what we buffer is immutable.
         self._buffer.append((bytes(data), addr))
-        self._buffer_size += len(data)
 
         if self._write_fut is None:
             # No current write operations are active, kick one off
@@ -529,7 +521,6 @@ class _ProactorDatagramTransport(_ProactorBasePipeTransport,
                 return
 
             data, addr = self._buffer.popleft()
-            self._buffer_size -= len(data)
             if self._address is not None:
                 self._write_fut = self._loop._proactor.send(self._sock,
                                                             data)
@@ -651,13 +642,11 @@ class BaseProactorEventLoop(base_events.BaseEventLoop):
             self, rawsock, protocol, sslcontext, waiter=None,
             *, server_side=False, server_hostname=None,
             extra=None, server=None,
-            ssl_handshake_timeout=None,
-            ssl_shutdown_timeout=None):
+            ssl_handshake_timeout=None):
         ssl_protocol = sslproto.SSLProtocol(
                 self, protocol, sslcontext, waiter,
                 server_side, server_hostname,
-                ssl_handshake_timeout=ssl_handshake_timeout,
-                ssl_shutdown_timeout=ssl_shutdown_timeout)
+                ssl_handshake_timeout=ssl_handshake_timeout)
         _ProactorSocketTransport(self, rawsock, ssl_protocol,
                                  extra=extra, server=server)
         return ssl_protocol._app_transport
@@ -708,20 +697,8 @@ class BaseProactorEventLoop(base_events.BaseEventLoop):
     async def sock_recv_into(self, sock, buf):
         return await self._proactor.recv_into(sock, buf)
 
-    async def sock_recvfrom(self, sock, bufsize):
-        return await self._proactor.recvfrom(sock, bufsize)
-
-    async def sock_recvfrom_into(self, sock, buf, nbytes=0):
-        if not nbytes:
-            nbytes = len(buf)
-
-        return await self._proactor.recvfrom_into(sock, buf, nbytes)
-
     async def sock_sendall(self, sock, data):
         return await self._proactor.send(sock, data)
-
-    async def sock_sendto(self, sock, data, address):
-        return await self._proactor.sendto(sock, data, 0, address)
 
     async def sock_connect(self, sock, address):
         return await self._proactor.connect(sock, address)
@@ -835,8 +812,7 @@ class BaseProactorEventLoop(base_events.BaseEventLoop):
 
     def _start_serving(self, protocol_factory, sock,
                        sslcontext=None, server=None, backlog=100,
-                       ssl_handshake_timeout=None,
-                       ssl_shutdown_timeout=None):
+                       ssl_handshake_timeout=None):
 
         def loop(f=None):
             try:
@@ -850,8 +826,7 @@ class BaseProactorEventLoop(base_events.BaseEventLoop):
                         self._make_ssl_transport(
                             conn, protocol, sslcontext, server_side=True,
                             extra={'peername': addr}, server=server,
-                            ssl_handshake_timeout=ssl_handshake_timeout,
-                            ssl_shutdown_timeout=ssl_shutdown_timeout)
+                            ssl_handshake_timeout=ssl_handshake_timeout)
                     else:
                         self._make_socket_transport(
                             conn, protocol,
