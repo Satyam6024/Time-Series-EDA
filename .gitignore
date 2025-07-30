@@ -1,0 +1,7 @@
+## Virtual Environment
+.env
+venv/
+.venv/
+
+## VSCode
+.vscode/

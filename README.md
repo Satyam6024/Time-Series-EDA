@@ -10,7 +10,7 @@ https://github.com/Satyam6024/Time-Series-EDA.git
 ### STEP 01- Create a conda environment after opening the repository
 
 ```bash
-conda create -p .venv python=3.10 -y
+conda create -p .venv python==3.10 -y
 ```
 > Note statsmodels supports Python 3.8, 3.9, and 3.10. 
 
